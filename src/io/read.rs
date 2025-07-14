@@ -1,5 +1,4 @@
 use fitsio::FitsFile;
-use fitsio::hdu::HduInfo;
 use ndarray::{Zip, prelude::*};
 use num_complex::Complex64;
 use std::error::Error;

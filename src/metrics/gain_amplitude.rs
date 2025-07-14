@@ -7,16 +7,15 @@ use ndrustfft::{FftHandler, ndfft};
 use noisy_float::types::n64;
 use num_complex::Complex64;
 use std::error::Error;
-use std::path::PathBuf;
+use std::path::Path;
 
 /// Wrapper around the actual smoothnes calculation
 pub(crate) fn run_smoothness_calc(
-    file_path: &PathBuf,
+    file_path: &Path,
 ) -> Result<(usize, Vec<f64>, Vec<f64>), Box<dyn Error>> {
     let file = SolutionsFile {
-        file_path: file_path.clone(),
+        file_path: file_path.to_path_buf(),
     };
-
     let solutions = file.read_fits()?;
 
     let num_tiles = solutions.num_tiles;
@@ -42,7 +41,6 @@ pub(crate) fn run_smoothness_calc(
     let mut xx_smoothness_vec: Vec<f64> = vec![];
     let mut yy_smoothness_vec: Vec<f64> = vec![];
     // Loop over antennas
-    // Order needs to be maintained, so unable to parallelise
     for i in 0..num_tiles {
         let mut tile_xx_gains = all_xx_gains.slice(s![i, ..]).to_owned();
         let mut tile_yy_gains = all_yy_gains.slice(s![i, ..]).to_owned();
