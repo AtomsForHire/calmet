@@ -40,7 +40,7 @@ Options:
 ```
 
 ``` 
-$ calmet all
+$ calmet cal-metrics
 Calculate all calibration metrics
 
 Usage: calmet cal-metrics [OPTIONS]
