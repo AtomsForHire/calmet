@@ -20,10 +20,10 @@ pub(crate) struct Cli {
 #[clap(arg_required_else_help = true)]
 pub(super) enum Commands {
     #[clap(about = "Calculate all calibration metrics")]
-    All(cal_args::CalArgs),
+    CalMetrics(cal_args::CalArgs),
 
     #[clap(about = "Calculate only EW and NS gain smoothness")]
-    GainSmoothness(cal_args::CalArgs),
+    AmpMetrics(cal_args::CalArgs),
 
     #[clap(about = "Calculate only EW and NS phase metrics")]
     PhaseMetrics(cal_args::CalArgs),
@@ -32,14 +32,14 @@ pub(super) enum Commands {
 impl Commands {
     pub(crate) fn run(&self) -> Result<(), Box<dyn Error>> {
         let files = match self {
-            Commands::All(args) => &args.files,
-            Commands::GainSmoothness(args) => &args.files,
+            Commands::CalMetrics(args) => &args.files,
+            Commands::AmpMetrics(args) => &args.files,
             Commands::PhaseMetrics(args) => &args.files,
         };
 
         let paths = resolve_paths(&files)?;
         match self {
-            Commands::All(_) => {
+            Commands::CalMetrics(_) => {
                 println!(
                     "Calculating amplitude smoothness, phase RMSE, and phase average euclidean distance"
                 );
@@ -80,7 +80,7 @@ impl Commands {
                     &mut dist_res_vecs,
                 )?;
             }
-            Commands::GainSmoothness(_) => {
+            Commands::AmpMetrics(_) => {
                 println!("Calculating amplitude smoothness");
                 let mut obsids: Vec<usize> = vec![];
                 let mut xx_smooth_vecs: Vec<Vec<f64>> = vec![];

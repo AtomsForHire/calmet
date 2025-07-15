@@ -30,10 +30,10 @@ Calculates metrics from hyperdrive solutions
 Usage: calmet <COMMAND>
 
 Commands:
-  all              Calculate all calibration metrics
-  gain-smoothness  Calculate only EW and NS gain smoothness
-  phase-metrics    Calculate only EW and NS phase metrics
-  help             Print this message or the help of the given subcommand(s)
+  cal-metrics    Calculate all calibration metrics
+  amp-metrics    Calculate only EW and NS gain smoothness
+  phase-metrics  Calculate only EW and NS phase metrics
+  help           Print this message or the help of the given subcommand(s)
 
 Options:
   -h, --help  Print help
@@ -43,7 +43,7 @@ Options:
 $ calmet all
 Calculate all calibration metrics
 
-Usage: calmet all [OPTIONS]
+Usage: calmet cal-metrics [OPTIONS]
 
 Options:
   -f, --files <FILES>...
@@ -51,7 +51,7 @@ Options:
 ```
 
 ```
-$ calmet all -f *.fits
+$ calmet cal-metrics -f *.fits
 Calculating amplitude smoothness, phase RMSE, and phase average euclidean distance
 Finished
 ```
