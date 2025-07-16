@@ -19,6 +19,9 @@ pub(crate) struct Cli {
 #[derive(Subcommand)]
 #[clap(arg_required_else_help = true)]
 pub(super) enum Commands {
+    #[clap(about = "Calculate all image metrics")]
+    ImgMetrics(img_args::ImgArgs),
+
     #[clap(about = "Calculate all calibration metrics")]
     CalMetrics(cal_args::CalArgs),
 
@@ -32,6 +35,7 @@ pub(super) enum Commands {
 impl Commands {
     pub(crate) fn run(&self) -> Result<(), Box<dyn Error>> {
         let files = match self {
+            Commands::ImgMetrics(args) => &args.files,
             Commands::CalMetrics(args) => &args.files,
             Commands::AmpMetrics(args) => &args.files,
             Commands::PhaseMetrics(args) => &args.files,
@@ -39,6 +43,9 @@ impl Commands {
 
         let paths = resolve_paths(&files)?;
         match self {
+            Commands::ImgMetrics(_) => {
+                println!("Not yet implemented")
+            }
             Commands::CalMetrics(_) => {
                 println!(
                     "Calculating amplitude smoothness, phase RMSE, and phase average euclidean distance"
