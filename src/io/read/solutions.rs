@@ -21,11 +21,11 @@ pub(crate) struct Solutions {
 }
 
 /// Struct for holding path to calibration solutions with methods for reading
-pub(crate) struct SolutionsFile {
+pub(crate) struct CalSolFile {
     pub(crate) file_path: PathBuf,
 }
 
-impl SolutionsFile {
+impl CalSolFile {
     pub(crate) fn read_fits(&self) -> Result<Solutions, Box<dyn Error>> {
         let mut fptr = FitsFile::open(&self.file_path)?;
 

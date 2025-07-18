@@ -1,4 +1,4 @@
-use crate::io::read::SolutionsFile;
+use crate::io::read::solutions::CalSolFile;
 use crate::metrics::interp::InterpolateNans;
 use ndarray::prelude::*;
 use std::error::Error;
@@ -7,7 +7,7 @@ use std::path::Path;
 pub(crate) fn run_phase_calcs(
     file_path: &Path,
 ) -> Result<(usize, Vec<f64>, Vec<f64>, Vec<f64>), Box<dyn Error>> {
-    let file = SolutionsFile {
+    let file = CalSolFile {
         file_path: file_path.to_path_buf(),
     };
     let solutions = file.read_fits()?;

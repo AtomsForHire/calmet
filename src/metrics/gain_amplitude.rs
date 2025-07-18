@@ -1,4 +1,4 @@
-use crate::io::read::SolutionsFile;
+use crate::io::read::solutions::CalSolFile;
 use crate::metrics::interp::InterpolateNans;
 use ndarray::prelude::*;
 use ndarray_stats::QuantileExt;
@@ -13,7 +13,7 @@ use std::path::Path;
 pub(crate) fn run_smoothness_calc(
     file_path: &Path,
 ) -> Result<(usize, Vec<f64>, Vec<f64>), Box<dyn Error>> {
-    let file = SolutionsFile {
+    let file = CalSolFile {
         file_path: file_path.to_path_buf(),
     };
     let solutions = file.read_fits()?;

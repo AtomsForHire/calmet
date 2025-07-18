@@ -3,7 +3,7 @@ use std::path::PathBuf;
 
 #[derive(Args, Debug)]
 #[clap(arg_required_else_help = true)]
-pub(super) struct ImgArgs {
-    #[arg(short, long)]
-    files: Vec<PathBuf>,
+pub(crate) struct ImgArgs {
+    #[arg(short, long, num_args=1..,)]
+    pub(super) files: Vec<PathBuf>,
 }

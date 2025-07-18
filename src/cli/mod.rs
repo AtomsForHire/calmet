@@ -1,6 +1,6 @@
 mod cal_args;
-use crate::metrics::{gain_amplitude, gain_phase};
 mod img_args;
+use crate::metrics::{gain_amplitude, gain_phase, image};
 
 use crate::io::write::write_results;
 use clap::{Parser, Subcommand};
@@ -44,7 +44,10 @@ impl Commands {
         let paths = resolve_paths(&files)?;
         match self {
             Commands::ImgMetrics(_) => {
-                println!("Not yet implemented")
+                println!("Calculating image RMS and dynamic range");
+                for path in paths.iter() {
+                    image::run_image_calc(path)?;
+                }
             }
             Commands::CalMetrics(_) => {
                 println!(
