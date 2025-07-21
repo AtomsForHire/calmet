@@ -18,17 +18,16 @@ pub(crate) fn run_smoothness_calc(
     };
     let solutions = file.read_fits()?;
 
-    let num_tiles = solutions.num_tiles;
+    let mut all_xx_gains = solutions
+        .complex_gains
+        .slice(s![.., .., 0])
+        .map(|c| c.norm());
+    let mut all_yy_gains = solutions
+        .complex_gains
+        .slice(s![.., .., 3])
+        .map(|c| c.norm());
 
-    let all_xx_complex_cal = solutions.complex_gains.slice(s![.., .., 0]);
-    let all_yy_complex_cal = solutions.complex_gains.slice(s![.., .., 3]);
-
-    // These should be shape [num_tiles, num_channels]
-    let all_xx_gains = all_xx_complex_cal.map(|comp| comp.norm());
-    let all_yy_gains = all_yy_complex_cal.map(|comp| comp.norm());
-
-    // Calculate the median of each CHANNEL through tiles
-    // NOTE: Cloning because the quantile axis method shuffles in place
+    // Need to clone since quantile_axis_skipnan_mut mutates arrays in place.
     let median_xx_gains =
         all_xx_gains
             .clone()
@@ -38,47 +37,34 @@ pub(crate) fn run_smoothness_calc(
             .clone()
             .quantile_axis_skipnan_mut(Axis(0), n64(0.5), &Linear)?;
 
-    let mut xx_smoothness_vec: Vec<f64> = vec![];
-    let mut yy_smoothness_vec: Vec<f64> = vec![];
-    // Loop over antennas
-    for i in 0..num_tiles {
-        let mut tile_xx_gains = all_xx_gains.slice(s![i, ..]).to_owned();
-        let mut tile_yy_gains = all_yy_gains.slice(s![i, ..]).to_owned();
+    let (xx_smoothness_vec, yy_smoothness_vec) = all_xx_gains
+        .axis_iter_mut(Axis(0))
+        .zip(all_yy_gains.axis_iter_mut(Axis(0)))
+        .filter(|(xx, _)| !xx.is_all_nan()) // Skip if flagged antenna
+        .map(|(mut xx, mut yy)| {
+            xx.zip_mut_with(&median_xx_gains, |x, &y| *x /= y);
+            yy.zip_mut_with(&median_yy_gains, |y, &z| *y /= z);
+            (
+                calculate_smoothness(&mut xx.to_owned()).unwrap(),
+                calculate_smoothness(&mut yy.to_owned()).unwrap(),
+            )
+        })
+        .unzip();
 
-        // Skip if antenna is flagged
-        if tile_xx_gains.is_all_nan() {
-            continue;
-        }
-
-        // Normalise by the median
-        tile_xx_gains.zip_mut_with(&median_xx_gains, |x, &y| *x /= y);
-        tile_yy_gains.zip_mut_with(&median_yy_gains, |x, &y| *x /= y);
-
-        let xx_smooth = calculate_smoothness(&mut tile_xx_gains)?;
-        let yy_smooth = calculate_smoothness(&mut tile_yy_gains)?;
-
-        xx_smoothness_vec.push(xx_smooth);
-        yy_smoothness_vec.push(yy_smooth);
-    }
     Ok((solutions.id, xx_smoothness_vec, yy_smoothness_vec))
 }
 
 /// Caluclate gain smoothness with the FT
 fn calculate_smoothness(gains: &mut Array1<f64>) -> Result<f64, Box<dyn Error>> {
-    // Interpolate NaN gaps linearly
     gains.interp_nans_inplace();
     let num_chans = gains.len();
 
-    // Convert to complex for ndfft() function
-    let gains_complex = gains.map(|&gain| Complex64::new(gain, 0.0));
-
+    let mut complex_gains = Array1::from_iter(gains.iter().map(|&g| Complex64::new(g, 0.0)));
     let mut output = Array1::<Complex64>::zeros(num_chans);
+    let mut handler = FftHandler::new(num_chans);
 
-    let mut handler: FftHandler<f64> = FftHandler::new(num_chans);
-    ndfft(&gains_complex, &mut output, &mut handler, 0);
+    ndfft(&mut complex_gains, &mut output, &mut handler, 0);
 
     let smooth_array = output.slice(s![1..num_chans / 2]).mapv(|x| x.norm()) / output[0].norm();
-    let smooth = smooth_array.mean().expect("Unable to calculate smoothness");
-
-    Ok(smooth)
+    Ok(smooth_array.mean().expect("Unable to calculate smoothness"))
 }

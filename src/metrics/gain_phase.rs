@@ -1,5 +1,6 @@
 use crate::io::read::solutions::CalSolFile;
 use crate::metrics::interp::InterpolateNans;
+use itertools::Itertools;
 use ndarray::prelude::*;
 use std::error::Error;
 use std::path::Path;
@@ -11,43 +12,35 @@ pub(crate) fn run_phase_calcs(
         file_path: file_path.to_path_buf(),
     };
     let solutions = file.read_fits()?;
+    let channels = Array1::<f64>::range(0.0, solutions.num_chans as f64, 1.0);
 
-    let num_tiles = solutions.num_tiles;
-    let num_chans = solutions.num_chans;
-    let channels = Array1::<f64>::range(0.0, num_chans as f64, 1.0);
+    let all_xx_angs = solutions
+        .complex_gains
+        .slice(s![.., .., 0])
+        .map(|c| c.arg());
+    let all_yy_angs = solutions
+        .complex_gains
+        .slice(s![.., .., 3])
+        .map(|c| c.arg());
 
-    let all_xx_complex_cal = solutions.complex_gains.slice(s![.., .., 0]);
-    let all_yy_complex_cal = solutions.complex_gains.slice(s![.., .., 3]);
+    let (dist_vec, xx_rmse_vec, yy_rmse_vec): (Vec<_>, Vec<_>, Vec<_>) = all_xx_angs
+        .axis_iter(Axis(0))
+        .zip(all_yy_angs.axis_iter(Axis(0)))
+        .map(|(xx_angs, yy_angs)| {
+            let mut x_fit = LinearRegression::new(channels.clone(), xx_angs.to_owned());
+            x_fit.fit();
+            let mut y_fit = LinearRegression::new(channels.clone(), yy_angs.to_owned());
+            y_fit.fit();
 
-    // These should be shape [num_tiles, num_channels]
-    let all_xx_angs = all_xx_complex_cal.map(|comp| comp.arg());
-    let all_yy_angs = all_yy_complex_cal.map(|comp| comp.arg());
-
-    let mut xx_rmse_vec: Vec<f64> = vec![];
-    let mut yy_rmse_vec: Vec<f64> = vec![];
-    let mut dist_vec: Vec<f64> = vec![];
-    // Loop over antennas
-    for i in 0..num_tiles {
-        let tile_xx_angs = all_xx_angs.slice(s![i, ..]).to_owned();
-        let tile_yy_angs = all_yy_angs.slice(s![i, ..]).to_owned();
-
-        // 1. Calculate RMSE
-        let mut x_fit = LinearRegression::new(channels.clone(), tile_xx_angs.clone());
-        let mut y_fit = LinearRegression::new(channels.clone(), tile_yy_angs.clone());
-
-        x_fit.fit();
-        y_fit.fit();
-
-        let x_rmse = x_fit.calc_rmse();
-        let y_rmse = y_fit.calc_rmse();
-
-        xx_rmse_vec.push(x_rmse);
-        yy_rmse_vec.push(y_rmse);
-
-        // 2. Calculate average euclidean distance
-        let dist = calc_dist(&tile_xx_angs, &tile_yy_angs);
-        dist_vec.push(dist);
-    }
+            (
+                calc_dist(&xx_angs, &yy_angs),
+                x_fit.calc_rmse(),
+                y_fit.calc_rmse(),
+            )
+        })
+        .collect::<Vec<_>>()
+        .into_iter()
+        .multiunzip();
 
     Ok((solutions.id, dist_vec, xx_rmse_vec, yy_rmse_vec))
 }
@@ -79,16 +72,10 @@ impl LinearRegression {
             self.y.interp_nans_inplace();
         }
 
-        // Calculate sums
-        let sx: f64 = self.x.sum();
-        let sy: f64 = self.y.sum();
-        let sxx: f64 = self.x.powi(2).sum();
-        let sxy: f64 = self
-            .x
-            .iter()
-            .zip(self.y.iter())
-            .map(|(&xi, &yi)| xi * yi)
-            .sum();
+        let sx = self.x.sum();
+        let sy = self.y.sum();
+        let sxx = self.x.powi(2).sum();
+        let sxy = (&self.x * &self.y).sum();
 
         let m = (n * sxy - sx * sy) / (n * sxx - sx.powi(2));
         let c = (sy - m * sx) / n;
@@ -99,32 +86,19 @@ impl LinearRegression {
 
     /// Calculat RMSE
     fn calc_rmse(&self) -> f64 {
-        // Model data
-        let yy = Array1::from_iter(
-            self.x
-                .iter()
-                .map(|&e| e * self.gradient.unwrap() + self.intercept.unwrap()),
-        );
-
-        let result = ((self.y.clone() - yy).powi(2))
+        let yy = &self.x * self.gradient.unwrap() + self.intercept.unwrap();
+        ((&self.y - &yy).powi(2))
             .mean()
             .expect("Unable to calculate mean in RMSE")
-            .sqrt();
-
-        return result;
+            .sqrt()
     }
 }
 
-fn calc_dist(pol1: &Array1<f64>, pol2: &Array1<f64>) -> f64 {
-    assert_eq!(pol1.len(), pol2.len());
-
+fn calc_dist(pol1: &ArrayView1<f64>, pol2: &ArrayView1<f64>) -> f64 {
     // shift pol1 to start at pol2
-    let shifted = pol1.clone() - (pol1[[0]] - pol2[[0]]);
-
-    let result = (shifted - pol2)
+    let shifted = pol1 - (pol1[0] - pol2[0]);
+    (shifted - pol2)
         .mean()
         .expect("Unable to calculate mean in average euclidean distance")
-        .abs();
-
-    return result;
+        .abs()
 }

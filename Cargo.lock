@@ -80,6 +80,7 @@ dependencies = [
  "clap",
  "fitsio",
  "glob",
+ "itertools",
  "ndarray",
  "ndarray-stats",
  "ndrustfft",

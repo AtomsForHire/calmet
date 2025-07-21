@@ -2,9 +2,10 @@ mod cal_args;
 mod img_args;
 use crate::metrics::{gain_amplitude, gain_phase, image};
 
-use crate::io::write::write_results;
+use crate::io::write::{write_results, write_results_1D};
 use clap::{Parser, Subcommand};
 use glob::glob;
+use itertools::Itertools;
 use std::error::Error;
 use std::path::{Path, PathBuf};
 
@@ -34,166 +35,152 @@ pub(super) enum Commands {
 
 impl Commands {
     pub(crate) fn run(&self) -> Result<(), Box<dyn Error>> {
-        let files = match self {
-            Commands::ImgMetrics(args) => &args.files,
-            Commands::CalMetrics(args) => &args.files,
-            Commands::AmpMetrics(args) => &args.files,
-            Commands::PhaseMetrics(args) => &args.files,
-        };
-
-        let paths = resolve_paths(&files)?;
         match self {
-            Commands::ImgMetrics(_) => {
-                println!("Calculating image RMS and dynamic range");
-                for path in paths.iter() {
-                    image::run_image_calc(path)?;
-                }
-            }
-            Commands::CalMetrics(_) => {
-                println!(
-                    "Calculating amplitude smoothness, phase RMSE, and phase average euclidean distance"
-                );
-                let mut obsids: Vec<usize> = vec![];
-                let mut dist_res_vecs: Vec<Vec<f64>> = vec![];
-                let mut xx_smooth_vecs: Vec<Vec<f64>> = vec![];
-                let mut yy_smooth_vecs: Vec<Vec<f64>> = vec![];
-                let mut xx_rmse_vecs: Vec<Vec<f64>> = vec![];
-                let mut yy_rmse_vecs: Vec<Vec<f64>> = vec![];
-                for path in paths.iter() {
-                    let (_, xx_smooth, yy_smooth) = gain_amplitude::run_smoothness_calc(path)?;
-                    xx_smooth_vecs.push(xx_smooth);
-                    yy_smooth_vecs.push(yy_smooth);
-
-                    let (id, dist, xx_rmse, yy_rmse) = gain_phase::run_phase_calcs(path)?;
-                    xx_rmse_vecs.push(xx_rmse);
-                    yy_rmse_vecs.push(yy_rmse);
-                    dist_res_vecs.push(dist);
-
-                    obsids.push(id);
-                }
-
-                write_results(
-                    Path::new("xx_gain_smoothness.txt"),
-                    &obsids,
-                    &mut xx_smooth_vecs,
-                )?;
-                write_results(
-                    Path::new("yy_gain_smoothness.txt"),
-                    &obsids,
-                    &mut yy_smooth_vecs,
-                )?;
-                write_results(Path::new("xx_phase_rmse.txt"), &obsids, &mut xx_rmse_vecs)?;
-                write_results(Path::new("yy_phase_rmse.txt"), &obsids, &mut yy_rmse_vecs)?;
-                write_results(
-                    Path::new("euclidean_distance.txt"),
-                    &obsids,
-                    &mut dist_res_vecs,
-                )?;
-            }
-            Commands::AmpMetrics(_) => {
-                println!("Calculating amplitude smoothness");
-                let mut obsids: Vec<usize> = vec![];
-                let mut xx_smooth_vecs: Vec<Vec<f64>> = vec![];
-                let mut yy_smooth_vecs: Vec<Vec<f64>> = vec![];
-                for path in paths.iter() {
-                    let (id, xx_res, yy_res) = gain_amplitude::run_smoothness_calc(path)?;
-                    obsids.push(id);
-                    xx_smooth_vecs.push(xx_res);
-                    yy_smooth_vecs.push(yy_res);
-                }
-
-                write_results(
-                    Path::new("xx_gain_smoothness.txt"),
-                    &obsids,
-                    &mut xx_smooth_vecs,
-                )?;
-                write_results(
-                    Path::new("yy_gain_smoothness.txt"),
-                    &obsids,
-                    &mut yy_smooth_vecs,
-                )?;
-            }
-            Commands::PhaseMetrics(_) => {
-                println!("Calculating RMSE and average euclidean distance");
-                let mut dist_res_vecs: Vec<Vec<f64>> = vec![];
-                let mut obsids: Vec<usize> = vec![];
-                let mut xx_rmse_vecs: Vec<Vec<f64>> = vec![];
-                let mut yy_rmse_vecs: Vec<Vec<f64>> = vec![];
-                for path in paths.iter() {
-                    let (id, dist, xx_res, yy_res) = gain_phase::run_phase_calcs(path)?;
-                    obsids.push(id);
-                    xx_rmse_vecs.push(xx_res);
-                    yy_rmse_vecs.push(yy_res);
-                    dist_res_vecs.push(dist);
-                }
-                write_results(Path::new("xx_phase_rmse.txt"), &obsids, &mut xx_rmse_vecs)?;
-                write_results(Path::new("yy_phase_rmse.txt"), &obsids, &mut yy_rmse_vecs)?;
-                write_results(
-                    Path::new("euclidean_distance.txt"),
-                    &obsids,
-                    &mut dist_res_vecs,
-                )?;
-            }
+            Commands::ImgMetrics(args) => run_img_metrics(args),
+            Commands::CalMetrics(args) => run_cal_metrics(args),
+            Commands::AmpMetrics(args) => run_amp_metrics(args),
+            Commands::PhaseMetrics(args) => run_phase_metrics(args),
         }
-
-        Ok(())
     }
 }
 
-fn resolve_paths(files: &Vec<PathBuf>) -> Result<Vec<PathBuf>, std::io::Error> {
-    let mut input_files: Vec<PathBuf> = vec![];
-    let mut valid_files: bool = true;
+fn run_img_metrics(args: &img_args::ImgArgs) -> Result<(), Box<dyn Error>> {
+    println!("Calculating image RMS and dynamic range");
+    let paths = resolve_paths(&args.files)?;
 
-    // If programs takes in a single input for input files, could be a wildcard input (depends on
-    // shell) or just a single file
+    let (obsids, rms_vec, dr_vec): (Vec<_>, Vec<_>, Vec<_>) = paths
+        .iter()
+        .map(|path| image::run_image_calc(path))
+        .filter_map(Result::ok)
+        .multiunzip();
+
+    write_results_1D(Path::new("image_rms.txt"), &obsids, &rms_vec)?;
+    write_results_1D(Path::new("image_dr.txt"), &obsids, &dr_vec)?;
+    Ok(())
+}
+
+fn run_cal_metrics(args: &cal_args::CalArgs) -> Result<(), Box<dyn Error>> {
+    println!("Calculating amplitude smoothness, phase RMSE, and phase average euclidean distance");
+    let paths = resolve_paths(&args.files)?;
+
+    let (obsids, mut xx_smooth_vecs, mut yy_smooth_vecs): (Vec<_>, Vec<_>, Vec<_>) = paths
+        .iter()
+        .map(|path| gain_amplitude::run_smoothness_calc(path))
+        .filter_map(Result::ok)
+        .multiunzip();
+
+    let (_, mut dist_res_vecs, mut xx_rmse_vecs, mut yy_rmse_vecs): (
+        Vec<_>,
+        Vec<_>,
+        Vec<_>,
+        Vec<_>,
+    ) = paths
+        .iter()
+        .map(|path| gain_phase::run_phase_calcs(path))
+        .filter_map(Result::ok)
+        .multiunzip();
+
+    write_results(
+        Path::new("xx_gain_smoothness.txt"),
+        &obsids,
+        &mut xx_smooth_vecs,
+    )?;
+    write_results(
+        Path::new("yy_gain_smoothness.txt"),
+        &obsids,
+        &mut yy_smooth_vecs,
+    )?;
+    write_results(Path::new("xx_phase_rmse.txt"), &obsids, &mut xx_rmse_vecs)?;
+    write_results(Path::new("yy_phase_rmse.txt"), &obsids, &mut yy_rmse_vecs)?;
+    write_results(
+        Path::new("euclidean_distance.txt"),
+        &obsids,
+        &mut dist_res_vecs,
+    )?;
+    Ok(())
+}
+
+fn run_amp_metrics(args: &cal_args::CalArgs) -> Result<(), Box<dyn Error>> {
+    println!("Calculating amplitude smoothness");
+    let paths = resolve_paths(&args.files)?;
+
+    let (obsids, mut xx_smooth_vecs, mut yy_smooth_vecs): (Vec<_>, Vec<_>, Vec<_>) = paths
+        .iter()
+        .map(|path| gain_amplitude::run_smoothness_calc(path))
+        .filter_map(Result::ok)
+        .multiunzip();
+
+    write_results(
+        Path::new("xx_gain_smoothness.txt"),
+        &obsids,
+        &mut xx_smooth_vecs,
+    )?;
+    write_results(
+        Path::new("yy_gain_smoothness.txt"),
+        &obsids,
+        &mut yy_smooth_vecs,
+    )?;
+    Ok(())
+}
+
+fn run_phase_metrics(args: &cal_args::CalArgs) -> Result<(), Box<dyn Error>> {
+    println!("Calculating RMSE and average euclidean distance");
+    let paths = resolve_paths(&args.files)?;
+
+    let (obsids, mut dist_res_vecs, mut xx_rmse_vecs, mut yy_rmse_vecs): (
+        Vec<_>,
+        Vec<_>,
+        Vec<_>,
+        Vec<_>,
+    ) = paths
+        .iter()
+        .map(|path| gain_phase::run_phase_calcs(path))
+        .filter_map(Result::ok)
+        .multiunzip();
+
+    write_results(Path::new("xx_phase_rmse.txt"), &obsids, &mut xx_rmse_vecs)?;
+    write_results(Path::new("yy_phase_rmse.txt"), &obsids, &mut yy_rmse_vecs)?;
+    write_results(
+        Path::new("euclidean_distance.txt"),
+        &obsids,
+        &mut dist_res_vecs,
+    )?;
+    Ok(())
+}
+
+fn resolve_paths(files: &[PathBuf]) -> Result<Vec<PathBuf>, std::io::Error> {
+    let mut input_files: Vec<PathBuf> = vec![];
+
     if files.len() == 1 {
         if let Some(path_str) = files[0].to_str() {
-            if path_str.contains("*") {
-                match glob(path_str) {
-                    Ok(paths) => {
-                        for entry in paths {
-                            match entry {
-                                Ok(path) => {
-                                    input_files.push(path);
-                                }
-                                Err(e) => {
-                                    eprintln!("Unable to match glob: {}", e);
-                                }
-                            }
-                        }
-                    }
-                    Err(e) => {
-                        eprintln!("Unable to match {} to files: {}", path_str, e);
-                    }
-                }
+            if path_str.contains('*') {
+                let paths = glob(path_str).map_err(|e| {
+                    std::io::Error::new(
+                        std::io::ErrorKind::InvalidInput,
+                        format!("Invalid glob pattern: {}", e),
+                    )
+                })?;
+
+                input_files = paths
+                    .filter_map(Result::ok)
+                    .filter(|p| p.is_file())
+                    .collect();
             } else {
                 let path = PathBuf::from(path_str);
                 if path.is_file() {
                     input_files.push(path);
-                } else {
-                    eprintln!("{:?} does not exist", path);
                 }
             }
-        } else {
-            eprintln!("Could not convert '{:?}' to str", files[0]);
         }
     } else {
-        for path in files.iter() {
-            if path.is_file() {
-                input_files.push(path.clone());
-            } else {
-                valid_files = false;
-                break;
-            }
-        }
+        input_files = files.iter().filter(|p| p.is_file()).cloned().collect();
     }
 
-    if valid_files && input_files.len() >= 1 {
-        Ok(input_files)
-    } else {
-        Err(std::io::Error::new(
-            std::io::ErrorKind::Other,
-            "One of more input files are invalid",
-        ))
+    if input_files.is_empty() {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::NotFound,
+            "No valid input files found.",
+        ));
     }
+    Ok(input_files)
 }

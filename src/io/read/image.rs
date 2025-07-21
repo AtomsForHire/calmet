@@ -38,7 +38,7 @@ impl ImageFile {
             .split_once("_")
             .expect("Could not split image file name to get obsid");
 
-        println!("{gps}");
+        let gps_num: usize = gps.parse()?;
 
         let mut fptr = FitsFile::open(&self.file_path)?;
 
@@ -57,7 +57,7 @@ impl ImageFile {
 
         let result = Image {
             data: data,
-            id: 0,
+            id: gps_num,
             num_pixels_x: num_pixels_x,
             num_pixels_y: num_pixels_y,
         };
