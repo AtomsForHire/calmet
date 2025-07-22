@@ -11,10 +11,26 @@ moment).
 
 # Installation
 
-Make sure cargo is installed on your system.
+## Dependencies
+1. Make sure cargo is installed on your system.
+2. You will also need cfitsio >= 3.37 for the [rust-fitsio
+   crate](https://github.com/simonrw/rust-fitsio).
+   * If you have a C compiler + autotools + make, you can use the `fitsio-src`
+   feature to have cargo compile cfitsio from source (following the rust-fitsio
+   documentation).
 
-1. `git clone git@github.com:AtomsForHire/calmet.git`
-2. `cd calmet && cargo install --path .`
+## Example commands
+1. Install with cfitsio already available on your system
+```sh
+> git clone git@github.com:AtomsForHire/calmet.git
+> cd calmet && cargo install --path .
+```
+
+2. Install with cargo compiling cfitsio for you
+```sh
+> git clone git@github.com:AtomsForHire/calmet.git
+> cd calmet && cargo install --path . --features=fitsio-src
+```
 
 # Usage
 To use this tool, simply run `calmet` to output available subcommands and their
