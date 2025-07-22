@@ -34,7 +34,7 @@ impl ImageFile {
             .and_then(|s| s.to_str())
             .expect("Unable to get file's stem");
 
-        let (gps, filler) = stem
+        let (gps, _) = stem
             .split_once("_")
             .expect("Could not split image file name to get obsid");
 
