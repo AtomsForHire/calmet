@@ -1,11 +1,13 @@
 use crate::io::read::solutions::CalSolFile;
 use crate::metrics::interp::InterpolateNans;
-use ndarray::prelude::*;
+use ndarray::{Zip, prelude::*};
 use ndarray_stats::QuantileExt;
 use ndarray_stats::interpolate::Linear;
 use ndrustfft::{FftHandler, ndfft};
 use noisy_float::types::n64;
 use num_complex::Complex64;
+use rayon::iter::IntoParallelIterator;
+use rayon::prelude::*;
 use std::error::Error;
 use std::path::Path;
 
@@ -37,19 +39,34 @@ pub(crate) fn run_smoothness_calc(
             .clone()
             .quantile_axis_skipnan_mut(Axis(0), n64(0.5), &Linear)?;
 
-    let (xx_smoothness_vec, yy_smoothness_vec) = all_xx_gains
-        .axis_iter_mut(Axis(0))
-        .zip(all_yy_gains.axis_iter_mut(Axis(0)))
-        .filter(|(xx, _)| !xx.is_all_nan()) // Skip if flagged antenna
-        .map(|(mut xx, mut yy)| {
-            xx.zip_mut_with(&median_xx_gains, |x, &y| *x /= y);
-            yy.zip_mut_with(&median_yy_gains, |y, &z| *y /= z);
-            (
-                calculate_smoothness(&mut xx.to_owned()).unwrap(),
-                calculate_smoothness(&mut yy.to_owned()).unwrap(),
-            )
-        })
-        .unzip();
+    // let (xx_smoothness_vec, yy_smoothness_vec) = all_xx_gains
+    //     .axis_iter_mut(Axis(0))
+    //     .zip(all_yy_gains.axis_iter_mut(Axis(0)))
+    //     .filter(|(xx, _)| !xx.is_all_nan()) // Skip if flagged antenna
+    //     .map(|(mut xx, mut yy)| {
+    //         xx.zip_mut_with(&median_xx_gains, |x, &y| *x /= y);
+    //         yy.zip_mut_with(&median_yy_gains, |y, &z| *y /= z);
+    //         (
+    //             calculate_smoothness(&mut xx.to_owned()).unwrap(),
+    //             calculate_smoothness(&mut yy.to_owned()).unwrap(),
+    //         )
+    //     })
+    //     .unzip();
+
+    let (xx_smoothness_vec, yy_smoothness_vec): (Vec<f64>, Vec<f64>) =
+        Zip::from(all_xx_gains.axis_iter_mut(Axis(0)))
+            .and(all_yy_gains.axis_iter_mut(Axis(0)))
+            .into_par_iter()
+            .filter(|(xx, _)| !xx.is_all_nan())
+            .map(|(mut xx, mut yy)| {
+                xx.zip_mut_with(&median_xx_gains, |x, &y| *x /= y);
+                yy.zip_mut_with(&median_yy_gains, |y, &z| *y /= z);
+                (
+                    calculate_smoothness(&mut xx.to_owned()).unwrap(),
+                    calculate_smoothness(&mut yy.to_owned()).unwrap(),
+                )
+            })
+            .unzip();
 
     Ok((solutions.id, xx_smoothness_vec, yy_smoothness_vec))
 }
