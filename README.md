@@ -39,11 +39,12 @@ options.
 Example:
 ```
 $ calmet
-Calculates metrics from hyperdrive solutions
+Calculates metrics from hyperdrive calibration solutions and FITS images
 
 Usage: calmet <COMMAND>
 
 Commands:
+  img-metrics    Calculate all image metrics
   cal-metrics    Calculate all calibration metrics
   amp-metrics    Calculate only EW and NS gain smoothness
   phase-metrics  Calculate only EW and NS phase metrics

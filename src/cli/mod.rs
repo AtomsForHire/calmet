@@ -11,7 +11,7 @@ use std::path::{Path, PathBuf};
 
 #[derive(Parser)]
 #[command(name = "calmet")]
-#[command(about = "Calculates metrics from hyperdrive solutions")]
+#[command(about = "Calculates metrics from hyperdrive calibration solutions and FITS images")]
 pub(crate) struct Cli {
     #[clap(subcommand)]
     pub(crate) sub_command: Commands,
