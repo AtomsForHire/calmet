@@ -6,8 +6,6 @@ I haven't tested much just yet.
 
 > [!WARNING]
 Compilation has been tested on Mac Sequoia 15.5 only, at the moment.
-Additionally, it only supports calibration solutions from Hyperdrive (at the
-moment). 
 
 # Installation
 
