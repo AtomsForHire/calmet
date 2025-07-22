@@ -2,6 +2,9 @@ use crate::io::read::image::ImageFile;
 use ndarray::prelude::*;
 use ndarray_stats::QuantileExt;
 use num_complex::ComplexFloat;
+use num_traits::Float;
+use rayon::iter::IntoParallelRefIterator;
+use rayon::prelude::*;
 use std::{error::Error, path::Path};
 
 pub(crate) fn run_image_calc(path: &Path) -> Result<(usize, f64, f64), Box<dyn Error>> {
@@ -17,7 +20,16 @@ pub(crate) fn run_image_calc(path: &Path) -> Result<(usize, f64, f64), Box<dyn E
 }
 
 fn calc_rms(data: &Array2<f64>) -> Result<f64, Box<dyn Error>> {
-    let result = data.powi(2).mean().unwrap().sqrt();
+    let result;
+    let num_pixels = data.len();
+    if num_pixels < 1e6 as usize {
+        result = data.powi(2).mean().unwrap().sqrt();
+    } else {
+        let sum_of_sq: f64 = data.par_iter().map(|&x| x * x).sum();
+        let mean_sum = sum_of_sq / num_pixels as f64;
+        result = mean_sum.sqrt();
+    }
+
     Ok(result)
 }
 
